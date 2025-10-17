@@ -1,93 +1,26 @@
-You can add a “displacement” slider that pushes vertices along their normals in the on‑page viewer. This won’t affect iOS Quick Look AR (USDZ is static); it’s only for the embedded viewer. For AR on iOS, you’d need the displacement baked into the USDZ (or a morph you can drive).
-
-Add this UI next to your hue slider:
-```html
-<div class="controls">
-  <label for="hue">Hue: <span id="hueVal">0</span>°</label>
-  <input id="hue" type="range" min="0" max="360" value="0" />
-  <label for="disp" style="margin-left:12px;">Displace: <span id="dispVal">0.0</span> cm</label>
-  <input id="disp" type="range" min="0" max="10" step="1" value="0" />
-</div>
-```
-
-Hook it up in your script (after your model-viewer element exists):
-```html
-<script>
-  const mv = document.getElementById('mv');
-  const disp = document.getElementById('disp');
-  const dispVal = document.getElementById('dispVal');
-
-  // Cache original positions per mesh so we can re-apply cleanly
-  const originalGeometry = new WeakMap();
-
-  function cacheGeometry(mesh) {
-    const geom = mesh.geometry;
-    if (!geom || originalGeometry.has(geom)) return;
-    const pos = geom.getAttribute('position');
-    const norm = geom.getAttribute('normal');
-    if (!pos || !norm) return;
-    originalGeometry.set(geom, {
-      positions: pos.array.slice(0),
-      normals: norm.array.slice(0)
-    });
-  }
-
-  function applyDisplacement(cm) {
-    // cm -> meters
-    const d = (cm / 100); // 0.1 cm step = 0.001 m
-
-    const scene = mv.model?.scene;
-    if (!scene) return;
-
-    scene.traverse((obj) => {
-      if (!obj.isMesh || !obj.geometry) return;
-
-      const geom = obj.geometry;
-      const pos = geom.getAttribute('position');
-      const norm = geom.getAttribute('normal');
-      if (!pos || !norm) return;
-
-      // Ensure original cached
-      cacheGeometry(obj);
-      const cached = originalGeometry.get(geom);
-      if (!cached) return;
-
-      const pArr = pos.array;
-      const nArr = norm.array;
-      const p0 = cached.positions;
-
-      for (let i = 0; i < pArr.length; i += 3) {
-        // original position + normal * d
-        pArr[i]     = p0[i]     + nArr[i]     * d;
-        pArr[i + 1] = p0[i + 1] + nArr[i + 1] * d;
-        pArr[i + 2] = p0[i + 2] + nArr[i + 2] * d;
-      }
-
-      pos.needsUpdate = true;
-      geom.computeVertexNormals(); // keep shading coherent
-      geom.computeBoundingSphere?.();
-      geom.computeBoundingBox?.();
-    });
-  }
-
-  // Wire slider: 0..10 steps => 0..1.0 cm (0.1 cm increments)
-  function updateDisp() {
-    const cm = Number(disp.value) * 0.1;
-    dispVal.textContent = cm.toFixed(1);
-    applyDisplacement(cm);
-  }
-
-  // Ensure model is loaded before manipulating geometry
-  mv.addEventListener('load', () => {
-    // initial cache of meshes
-    mv.model?.scene?.traverse((obj) => obj.isMesh && cacheGeometry(obj));
-    updateDisp();
-  });
-
-  disp.addEventListener('input', updateDisp);
-</script>
-```
-
-Notes
-- Slider range 0–10 gives 0–1.0 cm in 0.1 cm steps. Adjust as needed.
-- This modifies geometry in the viewer only; iOS Quick Look AR won’t reflect it. For iOS AR, bake displacement (or a morph) into the USDZ and control that instead.
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <style>
+      html, body { margin:0; height:100%; }
+      model-viewer { width:100%; height:100%; background:#000; }
+    </style>
+  </head>
+  <body>
+    <model-viewer
+      src="./model.glb"
+      ios-src="./model.usdz"
+      ar
+      ar-modes="quick-look scene-viewer webxr"
+      camera-controls
+      auto-rotate
+      exposure="1"
+      environment-image="neutral"
+      disable-tap
+      poster="./poster.jpg">
+      <button slot="ar-button">View in AR</button>
+    </model-viewer>
+  </body>
+</html>
